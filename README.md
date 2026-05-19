@@ -7,7 +7,7 @@ A clean, modern PowerShell profile designed to make Windows terminals feel fast,
 Run the following command in a PowerShell window:
 
 ```powershell
-
+irm https://github.com/DevyLG/powershell-profile/raw/main/setup.ps1 | iex
 ```
 
 ## After you run the installer
