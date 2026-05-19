@@ -235,6 +235,49 @@ function venv {
     }
 }
 
+function mkproj {
+    param(
+        [Parameter(Mandatory=$true, HelpMessage="Please provide a name for your project")]
+        [string]$projectName
+    )
+    
+    Write-Host "🚀 Initializing new Python project: $projectName..." -ForegroundColor Cyan
+    
+    # Create and enter the directory
+    New-Item -ItemType Directory -Name $projectName -Force | Out-Null
+    Set-Location $projectName
+    
+    # Create the virtual environment
+    Write-Host "Building .venv..." -ForegroundColor DarkGray
+    python -m venv .venv
+    
+    # Create a standard boilerplate main.py file
+    Write-Host "Generating main.py..." -ForegroundColor DarkGray
+    $template = @"
+def main():
+    pass
+
+if __name__ == '__main__':
+    main()
+"@
+    $template | Out-File -FilePath "main.py" -Encoding UTF8
+    
+    # Activate the environment in the current terminal
+    if (Test-Path ".\.venv\Scripts\Activate.ps1") {
+        .\.venv\Scripts\Activate.ps1
+    }
+    
+    # Open the folder in VS Code (or your default editor)
+    Write-Host "Done! Opening editor." -ForegroundColor Green
+    if (Get-Command "code" -ErrorAction SilentlyContinue) {
+        code .
+    } else {
+        & $EDITOR .
+    }
+}
+
+
+
 
 # Simplified Process Management
 function k9 { Stop-Process -Name $args[0] }
@@ -381,6 +424,7 @@ $($PSStyle.Foreground.Green)amp$($PSStyle.Reset) <cmd> - Runs AMP Instant Manage
 
 $($PSStyle.Foreground.Cyan)Python Workflows$($PSStyle.Reset)
 $($PSStyle.Foreground.Yellow)=======================$($PSStyle.Reset)
+$($PSStyle.Foreground.Green)mkproj$($PSStyle.Reset) <name> - Bootstraps a new Python project, creates .venv, and opens the editor.
 $($PSStyle.Foreground.Green)mkvenv$($PSStyle.Reset) - Creates a new Python .venv folder and activates it instantly.
 $($PSStyle.Foreground.Green)venv$($PSStyle.Reset) - Activates an existing Python .venv in the current directory.
 
