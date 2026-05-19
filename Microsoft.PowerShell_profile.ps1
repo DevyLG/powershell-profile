@@ -2,7 +2,6 @@
 ### Cleaned & Optimized
 
 $repo_root = "https://raw.githubusercontent.com/DevyLG"
-$updateInterval = 7
 
 # Helper function for cross-edition compatibility
 function Get-ProfileDir {
