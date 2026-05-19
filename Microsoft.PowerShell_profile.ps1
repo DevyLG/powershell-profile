@@ -217,7 +217,7 @@ function docs {
     $docsPath = if ([Environment]::GetFolderPath("MyDocuments")) { [Environment]::GetFolderPath("MyDocuments") } else { "$HOME\Documents" }
     Set-Location -Path $docsPath
 }
-
+# changed
 function dtop {
     $dtopPath = if ([Environment]::GetFolderPath("Desktop")) { [Environment]::GetFolderPath("Desktop") } else { "$HOME\Desktop" }
     Set-Location -Path $dtopPath
