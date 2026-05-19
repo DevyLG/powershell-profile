@@ -213,9 +213,15 @@ function trash($path) {
 ### Custom Shortcuts & Workflows ###
 
 # Navigation
-function docs { Set-Location -Path (if([Environment]::GetFolderPath("MyDocuments")) {[Environment]::GetFolderPath("MyDocuments")} else {$HOME + "\Documents"}) }
-function dtop { Set-Location -Path (if([Environment]::GetFolderPath("Desktop")) {[Environment]::GetFolderPath("Desktop")} else {$HOME + "\Documents"}) }
+function docs {
+    $docsPath = if ([Environment]::GetFolderPath("MyDocuments")) { [Environment]::GetFolderPath("MyDocuments") } else { "$HOME\Documents" }
+    Set-Location -Path $docsPath
+}
 
+function dtop {
+    $dtopPath = if ([Environment]::GetFolderPath("Desktop")) { [Environment]::GetFolderPath("Desktop") } else { "$HOME\Desktop" }
+    Set-Location -Path $dtopPath
+}
 # Python Virtual Environments
 function mkvenv { 
     python -m venv venv
