@@ -255,7 +255,7 @@ function mkproj {
     Write-Host "Generating main.py..." -ForegroundColor DarkGray
     $template = @"
 def main():
-    pass
+    print("Hello from $projectName!")
 
 if __name__ == '__main__':
     main()
@@ -275,8 +275,6 @@ if __name__ == '__main__':
         & $EDITOR .
     }
 }
-
-
 
 
 # Simplified Process Management
