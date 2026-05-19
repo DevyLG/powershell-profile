@@ -375,10 +375,14 @@ $($PSStyle.Foreground.Yellow)=======================$($PSStyle.Reset)
 $($PSStyle.Foreground.Green)Edit-Profile$($PSStyle.Reset) - Opens the current user's profile for editing.
 $($PSStyle.Foreground.Green)Update-Profile$($PSStyle.Reset) - Pulls the latest config from your GitHub.
 
+$($PSStyle.Foreground.Cyan)Server Management$($PSStyle.Reset)
+$($PSStyle.Foreground.Yellow)=======================$($PSStyle.Reset)
+$($PSStyle.Foreground.Green)amp$($PSStyle.Reset) <cmd> - Runs AMP Instant Manager (e.g., 'amp status').
+
 $($PSStyle.Foreground.Cyan)Python Workflows$($PSStyle.Reset)
 $($PSStyle.Foreground.Yellow)=======================$($PSStyle.Reset)
-$($PSStyle.Foreground.Green)mkvenv$($PSStyle.Reset) - Creates a new Python venv folder and activates it instantly.
-$($PSStyle.Foreground.Green)venv$($PSStyle.Reset) - Activates an existing Python venv in the current directory.
+$($PSStyle.Foreground.Green)mkvenv$($PSStyle.Reset) - Creates a new Python .venv folder and activates it instantly.
+$($PSStyle.Foreground.Green)venv$($PSStyle.Reset) - Activates an existing Python .venv in the current directory.
 
 $($PSStyle.Foreground.Cyan)Git Shortcuts$($PSStyle.Reset)
 $($PSStyle.Foreground.Yellow)=======================$($PSStyle.Reset)
