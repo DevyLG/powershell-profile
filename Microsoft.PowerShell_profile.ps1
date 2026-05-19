@@ -277,7 +277,6 @@ if __name__ == '__main__':
 }
 
 
-
 # Port Hog Finder
 function whoson {
     param(
@@ -328,6 +327,70 @@ function g { __zoxide_z github }
 function gcl { git clone "$args" }
 function gcom { git add .; git commit -m "$args" }
 function lazyg { git add .; git commit -m "$args"; git push }
+
+
+# Tech Bench Diagnostic Grabber
+function Get-PCReport {
+    Write-Host "Gathering PC diagnostics..." -ForegroundColor Cyan
+    
+    # Define the desktop path and file name with a timestamp
+    $desktopPath = if ([Environment]::GetFolderPath("Desktop")) { [Environment]::GetFolderPath("Desktop") } else { "$HOME\Desktop" }
+    $reportPath = Join-Path $desktopPath "PC_Report_$(Get-Date -Format 'yyyyMMdd_HHmmss').txt"
+    
+    try {
+        # Query hardware directly from the system
+        $os = Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue
+        $mobo = Get-CimInstance Win32_BaseBoard -ErrorAction SilentlyContinue
+        $cpu = Get-CimInstance Win32_Processor -ErrorAction SilentlyContinue
+        $ram = Get-CimInstance Win32_PhysicalMemory -ErrorAction SilentlyContinue
+        $gpu = Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue
+        $disks = Get-CimInstance Win32_DiskDrive -ErrorAction SilentlyContinue
+        $license = Get-CimInstance SoftwareLicensingService -ErrorAction SilentlyContinue
+        
+        # Calculate Total RAM
+        $totalRamGB = 0
+        if ($ram) { $totalRamGB = [math]::Round(($ram | Measure-Object -Property Capacity -Sum).Sum / 1GB, 2) }
+        
+        # Build the text file content
+        $report = @()
+        $report += "========================================"
+        $report += "          PC DIAGNOSTIC REPORT          "
+        $report += "========================================"
+        $report += "Date Generated: $(Get-Date)"
+        $report += "OS Version: $($os.Caption) ($($os.OSArchitecture))"
+        
+        $oemKey = if (![string]::IsNullOrWhiteSpace($license.OA3xOriginalProductKey)) { $license.OA3xOriginalProductKey } else { "Not found in BIOS/UEFI" }
+        $report += "OEM BIOS Key: $oemKey"
+        
+        $report += "`n[ MOTHERBOARD & CPU ]"
+        $report += "Motherboard: $($mobo.Manufacturer) $($mobo.Product)"
+        $report += "CPU: $($cpu.Name)"
+        $report += "Total RAM: $totalRamGB GB"
+        
+        $report += "`n[ GRAPHICS ]"
+        foreach ($g in $gpu) {
+            $report += "GPU: $($g.Name)"
+        }
+        
+        $report += "`n[ STORAGE DRIVES ]"
+        foreach ($d in $disks) {
+            $sizeGB = [math]::Round($d.Size / 1GB, 2)
+            $report += "Drive: $($d.Model) ($sizeGB GB) - Status: $($d.Status)"
+        }
+        $report += "========================================"
+        
+        # Save to desktop and open it instantly
+        $report | Out-File -FilePath $reportPath -Encoding UTF8
+        Write-Host "✅ Diagnostic report saved to Desktop!" -ForegroundColor Green
+        
+        # Automatically open the text file so you can read it right away
+        Invoke-Item $reportPath
+
+    } catch {
+        Write-Error "Failed to gather some system information. Ensure you are running this on a compatible Windows machine."
+    }
+}
+
 
 # Clipboard
 function cpy { Set-Clipboard $args[0] }
@@ -475,6 +538,7 @@ $($PSStyle.Foreground.Green)lazyg$($PSStyle.Reset) <msg> - Adds, commits, and pu
 
 $($PSStyle.Foreground.Cyan)Shortcuts$($PSStyle.Reset)
 $($PSStyle.Foreground.Yellow)=======================$($PSStyle.Reset)
+$($PSStyle.Foreground.Green)Get-PCReport$($PSStyle.Reset) - Generates a full hardware diagnostic text file on the Desktop.
 $($PSStyle.Foreground.Green)cpy$($PSStyle.Reset) <text> - Copies text to clipboard.
 $($PSStyle.Foreground.Green)pst$($PSStyle.Reset) - Retrieves text from clipboard.
 $($PSStyle.Foreground.Green)df$($PSStyle.Reset) - Displays volume info.
