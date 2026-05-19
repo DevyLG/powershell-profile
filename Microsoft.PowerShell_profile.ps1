@@ -328,6 +328,41 @@ function gcl { git clone "$args" }
 function gcom { git add .; git commit -m "$args" }
 function lazyg { git add .; git commit -m "$args"; git push }
 
+# Clean Network Snapshot
+function netinfo {
+    Write-Host "Fetching network information..." -ForegroundColor DarkGray
+    
+    # Grab Public IP with a quick timeout so it doesn't hang if offline
+    try { 
+        $publicIp = (Invoke-RestMethod -Uri 'https://ifconfig.me/ip' -TimeoutSec 3) 
+    } catch { 
+        $publicIp = "Unavailable" 
+    }
+    
+    # Find the active network adapter that actually has an internet connection
+    $activeNet = Get-NetIPConfiguration | Where-Object { $_.IPv4DefaultGateway -ne $null } | Select-Object -First 1
+    
+    if ($activeNet) {
+        $localIp = $activeNet.IPv4Address.IPAddress
+        $gateway = $activeNet.IPv4DefaultGateway.NextHop
+        $dns = ($activeNet.DNSServer | Where-Object AddressFamily -eq 2).ServerAddresses -join ", "
+        $adapter = $activeNet.InterfaceAlias
+    } else {
+        $localIp = "Disconnected"
+        $gateway = "Disconnected"
+        $dns = "Disconnected"
+        $adapter = "None"
+    }
+
+    # Print cleanly formatted output
+    Write-Host "====================================" -ForegroundColor DarkGray
+    Write-Host " Adapter:   " -NoNewline -ForegroundColor Gray; Write-Host $adapter -ForegroundColor White
+    Write-Host " Local IP:  " -NoNewline -ForegroundColor Gray; Write-Host $localIp -ForegroundColor Green
+    Write-Host " Gateway:   " -NoNewline -ForegroundColor Gray; Write-Host $gateway -ForegroundColor Yellow
+    Write-Host " DNS:       " -NoNewline -ForegroundColor Gray; Write-Host $dns -ForegroundColor Cyan
+    Write-Host " Public IP: " -NoNewline -ForegroundColor Gray; Write-Host $publicIp -ForegroundColor Magenta
+    Write-Host "====================================" -ForegroundColor DarkGray
+}
 
 # Tech Bench Diagnostic Grabber
 function Get-PCReport {
@@ -539,6 +574,7 @@ $($PSStyle.Foreground.Green)lazyg$($PSStyle.Reset) <msg> - Adds, commits, and pu
 $($PSStyle.Foreground.Cyan)Shortcuts$($PSStyle.Reset)
 $($PSStyle.Foreground.Yellow)=======================$($PSStyle.Reset)
 $($PSStyle.Foreground.Green)Get-PCReport$($PSStyle.Reset) - Generates a full hardware diagnostic text file on the Desktop.
+$($PSStyle.Foreground.Green)netinfo$($PSStyle.Reset) - Displays a clean, color-coded summary of your active network connection.
 $($PSStyle.Foreground.Green)cpy$($PSStyle.Reset) <text> - Copies text to clipboard.
 $($PSStyle.Foreground.Green)pst$($PSStyle.Reset) - Retrieves text from clipboard.
 $($PSStyle.Foreground.Green)df$($PSStyle.Reset) - Displays volume info.
