@@ -59,10 +59,12 @@ if (-not [string]::IsNullOrWhiteSpace($lastExecRaw)) {
 # Check for Profile Updates
 function Update-Profile {
     try {
-        $url = "$repo_root/powershell-profile/main/Microsoft.PowerShell_profile.ps1"
+        # The ?t=$(Get-Random) tricks GitHub into bypassing its 5-minute cache
+        $url = "$repo_root/powershell-profile/main/Microsoft.PowerShell_profile.ps1?t=$(Get-Random)"
         $oldhash = Get-FileHash $PROFILE
-        Invoke-RestMethod $url -OutFile "$env:temp/Microsoft.PowerShell_profile.ps1"
+        Invoke-RestMethod -Uri $url -OutFile "$env:temp/Microsoft.PowerShell_profile.ps1"
         $newhash = Get-FileHash "$env:temp/Microsoft.PowerShell_profile.ps1"
+        
         if ($newhash.Hash -ne $oldhash.Hash) {
             Copy-Item -Path "$env:temp/Microsoft.PowerShell_profile.ps1" -Destination $PROFILE -Force
             Write-Host "Profile has been updated. Please restart your shell to reflect changes" -ForegroundColor Magenta
@@ -74,13 +76,6 @@ function Update-Profile {
     } finally {
         Remove-Item "$env:temp/Microsoft.PowerShell_profile.ps1" -ErrorAction SilentlyContinue
     }
-}
-
-# Run Update Check automatically based on interval
-if (-not (Test-Path $timeFilePath) -or $null -eq $lastExec -or ((Get-Date) - $lastExec).TotalDays -gt $updateInterval) {
-    Update-Profile
-    $currentTime = Get-Date -Format 'yyyy-MM-dd'
-    $currentTime | Out-File -FilePath $timeFilePath
 }
 
 # Admin Check and Prompt Customization
@@ -225,12 +220,12 @@ function dtop {
 # Python Virtual Environments
 function mkvenv { 
     Write-Host "Creating virtual environment..." -ForegroundColor Cyan
-    python -m venv venv
+    python -m venv .venv
     .\.venv\Scripts\Activate.ps1
 }
 
 function venv { 
-    if (Test-Path ".\venv\Scripts\Activate.ps1") {
+    if (Test-Path ".\.venv\Scripts\Activate.ps1") {
         .\.venv\Scripts\Activate.ps1
     } else {
         Write-Host "❌ No virtual environment found in this folder. Run 'mkvenv' first to create one." -ForegroundColor Red
