@@ -277,6 +277,40 @@ if __name__ == '__main__':
 }
 
 
+
+# Port Hog Finder
+function whoson {
+    param(
+        [Parameter(Mandatory=$true, HelpMessage="Enter the port number to check")]
+        [int]$port
+    )
+    
+    Write-Host "Scanning for processes on port $port..." -ForegroundColor Cyan
+    
+    # Check both TCP and UDP connections
+    $tcp = Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue
+    $udp = Get-NetUDPEndpoint -LocalPort $port -ErrorAction SilentlyContinue
+    $connections = @($tcp) + @($udp)
+    
+    if ($connections.Count -eq 0) {
+        Write-Host "No active processes found holding port $port." -ForegroundColor Green
+        return
+    }
+    
+    # Loop through findings and output the exact program locking the port
+    foreach ($conn in $connections) {
+        $pid = $conn.OwningProcess
+        $process = Get-Process -Id $pid -ErrorAction SilentlyContinue
+        $processName = if ($process) { $process.ProcessName } else { "System/RequiresAdmin" }
+        
+        Write-Host "PID: " -NoNewline
+        Write-Host "$($pid.ToString().PadRight(6))" -ForegroundColor Yellow -NoNewline
+        Write-Host " | Process: " -NoNewline
+        Write-Host "$processName" -ForegroundColor Green
+    }
+}
+
+
 # Simplified Process Management
 function k9 { Stop-Process -Name $args[0] }
 
@@ -419,6 +453,7 @@ $($PSStyle.Foreground.Green)Update-Profile$($PSStyle.Reset) - Pulls the latest c
 $($PSStyle.Foreground.Cyan)Server Management$($PSStyle.Reset)
 $($PSStyle.Foreground.Yellow)=======================$($PSStyle.Reset)
 $($PSStyle.Foreground.Green)amp$($PSStyle.Reset) <cmd> - Runs AMP Instant Manager (e.g., 'amp status').
+$($PSStyle.Foreground.Green)whoson$($PSStyle.Reset) <port> - Finds the exact Process ID and program locking a network port.
 
 $($PSStyle.Foreground.Cyan)Python Workflows$($PSStyle.Reset)
 $($PSStyle.Foreground.Yellow)=======================$($PSStyle.Reset)
