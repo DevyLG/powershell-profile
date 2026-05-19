@@ -207,6 +207,10 @@ function trash($path) {
 
 ### Custom Shortcuts & Workflows ###
 
+# CubeCoders AMP Instant Manager
+function amp { & ampinstmgr.exe @args }
+
+
 # Navigation
 function docs {
     $docsPath = if ([Environment]::GetFolderPath("MyDocuments")) { [Environment]::GetFolderPath("MyDocuments") } else { "$HOME\Documents" }
