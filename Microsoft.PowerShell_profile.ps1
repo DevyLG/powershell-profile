@@ -217,17 +217,26 @@ function docs {
     $docsPath = if ([Environment]::GetFolderPath("MyDocuments")) { [Environment]::GetFolderPath("MyDocuments") } else { "$HOME\Documents" }
     Set-Location -Path $docsPath
 }
-# changed
+
 function dtop {
     $dtopPath = if ([Environment]::GetFolderPath("Desktop")) { [Environment]::GetFolderPath("Desktop") } else { "$HOME\Desktop" }
     Set-Location -Path $dtopPath
 }
 # Python Virtual Environments
 function mkvenv { 
+    Write-Host "Creating virtual environment..." -ForegroundColor Cyan
     python -m venv venv
-    .\venv\Scripts\activate
+    .\venv\Scripts\Activate.ps1
 }
-function venv { .\venv\Scripts\activate }
+
+function venv { 
+    if (Test-Path ".\venv\Scripts\Activate.ps1") {
+        .\venv\Scripts\Activate.ps1
+    } else {
+        Write-Host "❌ No virtual environment found in this folder. Run 'mkvenv' first to create one." -ForegroundColor Red
+    }
+}
+
 
 # Simplified Process Management
 function k9 { Stop-Process -Name $args[0] }
