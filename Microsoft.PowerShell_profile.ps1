@@ -226,12 +226,12 @@ function dtop {
 function mkvenv { 
     Write-Host "Creating virtual environment..." -ForegroundColor Cyan
     python -m venv venv
-    .\venv\Scripts\Activate.ps1
+    .\.venv\Scripts\Activate.ps1
 }
 
 function venv { 
     if (Test-Path ".\venv\Scripts\Activate.ps1") {
-        .\venv\Scripts\Activate.ps1
+        .\.venv\Scripts\Activate.ps1
     } else {
         Write-Host "❌ No virtual environment found in this folder. Run 'mkvenv' first to create one." -ForegroundColor Red
     }
