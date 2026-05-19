@@ -299,12 +299,12 @@ function whoson {
     
     # Loop through findings and output the exact program locking the port
     foreach ($conn in $connections) {
-        $pid = $conn.OwningProcess
-        $process = Get-Process -Id $pid -ErrorAction SilentlyContinue
+        $procId = $conn.OwningProcess
+        $process = Get-Process -Id $procId -ErrorAction SilentlyContinue
         $processName = if ($process) { $process.ProcessName } else { "System/RequiresAdmin" }
         
         Write-Host "PID: " -NoNewline
-        Write-Host "$($pid.ToString().PadRight(6))" -ForegroundColor Yellow -NoNewline
+        Write-Host "$($procId.ToString().PadRight(6))" -ForegroundColor Yellow -NoNewline
         Write-Host " | Process: " -NoNewline
         Write-Host "$processName" -ForegroundColor Green
     }
