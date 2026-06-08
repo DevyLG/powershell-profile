@@ -5,10 +5,11 @@ $repo_root = "https://raw.githubusercontent.com/DevyLG"
 
 # Helper function for cross-edition compatibility
 function Get-ProfileDir {
+    $myDocs = [Environment]::GetFolderPath("MyDocuments")
     if ($PSVersionTable.PSEdition -eq "Core") {
-        return [Environment]::GetFolderPath("MyDocuments") + "\PowerShell"
+        return Join-Path -Path $myDocs -ChildPath "PowerShell"
     } elseif ($PSVersionTable.PSEdition -eq "Desktop") {
-        return [Environment]::GetFolderPath("MyDocuments") + "\WindowsPowerShell"
+        return Join-Path -Path $myDocs -ChildPath "WindowsPowerShell"
     } else {
         Write-Error "Unsupported PowerShell edition: $($PSVersionTable.PSEdition)"
         return $null
@@ -57,15 +58,16 @@ if (-not [string]::IsNullOrWhiteSpace($lastExecRaw)) {
 
 # Check for Profile Updates
 function Update-Profile {
+    $tempFile = Join-Path -Path $env:TEMP -ChildPath "Microsoft.PowerShell_profile.ps1"
     try {
         # The ?t=$(Get-Random) tricks GitHub into bypassing its 5-minute cache
         $url = "$repo_root/powershell-profile/main/Microsoft.PowerShell_profile.ps1?t=$(Get-Random)"
         $oldhash = Get-FileHash $PROFILE
-        Invoke-RestMethod -Uri $url -OutFile "$env:temp/Microsoft.PowerShell_profile.ps1"
-        $newhash = Get-FileHash "$env:temp/Microsoft.PowerShell_profile.ps1"
+        Invoke-RestMethod -Uri $url -OutFile $tempFile
+        $newhash = Get-FileHash $tempFile
         
         if ($newhash.Hash -ne $oldhash.Hash) {
-            Copy-Item -Path "$env:temp/Microsoft.PowerShell_profile.ps1" -Destination $PROFILE -Force
+            Copy-Item -Path $tempFile -Destination $PROFILE -Force
             Write-Host "Profile has been updated. Please restart your shell to reflect changes" -ForegroundColor Magenta
         } else {
             Write-Host "Profile is up to date." -ForegroundColor Green
@@ -73,7 +75,7 @@ function Update-Profile {
     } catch {
         Write-Error "Unable to check for updates: $_"
     } finally {
-        Remove-Item "$env:temp/Microsoft.PowerShell_profile.ps1" -ErrorAction SilentlyContinue
+        Remove-Item $tempFile -ErrorAction SilentlyContinue
     }
 }
 
@@ -133,11 +135,23 @@ function winutildev { Invoke-Expression (Invoke-RestMethod https://christitus.co
 # System Utilities
 function admin {
     $cwd = (Get-Location).ProviderPath
-    if ($args.Count -gt 0) {
-        $argList = $args -join ' '
-        Start-Process wt -Verb runAs -ArgumentList @('-d', $cwd, 'pwsh.exe', '-NoExit', '-Command', $argList)
+    $currentShell = if ($PSVersionTable.PSEdition -eq "Core") { "pwsh.exe" } else { "powershell.exe" }
+
+    if (Get-Command wt -ErrorAction SilentlyContinue) {
+        if ($args.Count -gt 0) {
+            $argList = $args -join ' '
+            Start-Process wt -Verb runAs -ArgumentList @('-d', $cwd, $currentShell, '-NoExit', '-Command', $argList)
+        } else {
+            Start-Process wt -Verb runAs -ArgumentList @('-d', $cwd, $currentShell, '-NoExit')
+        }
     } else {
-        Start-Process wt -Verb runAs -ArgumentList @('-d', $cwd, 'pwsh.exe', '-NoExit')
+        # Fallback for systems without Windows Terminal
+        if ($args.Count -gt 0) {
+            $argList = @('-NoExit', '-Command', ($args -join ' '))
+            Start-Process $currentShell -WorkingDirectory $cwd -Verb runAs -ArgumentList $argList
+        } else {
+            Start-Process $currentShell -WorkingDirectory $cwd -Verb runAs -ArgumentList '-NoExit'
+        }
     }
 }
 Set-Alias -Name su -Value admin
@@ -320,13 +334,38 @@ function ll { Get-ChildItem -Force | Format-Table -AutoSize }
 # Git Shortcuts
 function gs { git status }
 function ga { git add . }
-function gc { param($m) git commit -m "$m" }
+function gc {
+    $msg = $args -join ' '
+    if ([string]::IsNullOrWhiteSpace($msg)) {
+        Write-Error "Commit message cannot be empty."
+        return
+    }
+    git commit -m $msg
+}
+function gp { git push }
 function gpush { git push }
 function gpull { git pull }
 function g { __zoxide_z github }
-function gcl { git clone "$args" }
-function gcom { git add .; git commit -m "$args" }
-function lazyg { git add .; git commit -m "$args"; git push }
+function gcl { git clone @args }
+function gcom {
+    $msg = $args -join ' '
+    if ([string]::IsNullOrWhiteSpace($msg)) {
+        Write-Error "Commit message cannot be empty."
+        return
+    }
+    git add .
+    git commit -m $msg
+}
+function lazyg {
+    $msg = $args -join ' '
+    if ([string]::IsNullOrWhiteSpace($msg)) {
+        Write-Error "Commit message cannot be empty."
+        return
+    }
+    git add .
+    git commit -m $msg
+    git push
+}
 
 # Clean Network Snapshot
 function netinfo {
