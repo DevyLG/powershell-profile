@@ -471,6 +471,27 @@ function cpy { Set-Clipboard $args[0] }
 function pst { Get-Clipboard }
 function sysinfo { Get-ComputerInfo }
 
+# Environment PATH Viewer
+function show-path { $env:PATH -split ';' | Where-Object { $_ } }
+
+# Container & WSL Utilities
+function dps {
+    if (Get-Command docker -ErrorAction SilentlyContinue) {
+        docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+    } else {
+        Write-Error "Docker command not found."
+    }
+}
+function wsl-restart {
+    if ($isAdmin) {
+        Write-Host "Restarting WSL service (LxssManager)..." -ForegroundColor Cyan
+        Restart-Service -Name "LxssManager" -Force
+        Write-Host "WSL has been restarted successfully." -ForegroundColor Green
+    } else {
+        Write-Warning "Restarting WSL requires administrator privileges. Re-run command in an elevated prompt."
+    }
+}
+
 # PSReadLine Configuration
 function Set-PSReadLineOptionsCompat {
     param([hashtable]$Options)
@@ -619,9 +640,11 @@ $($PSStyle.Foreground.Green)pst$($PSStyle.Reset) - Retrieves text from clipboard
 $($PSStyle.Foreground.Green)df$($PSStyle.Reset) - Displays volume info.
 $($PSStyle.Foreground.Green)docs$($PSStyle.Reset) - Jumps to Documents.
 $($PSStyle.Foreground.Green)dtop$($PSStyle.Reset) - Jumps to Desktop.
+$($PSStyle.Foreground.Green)dps$($PSStyle.Reset) - Displays compact list of running Docker containers.
 $($PSStyle.Foreground.Green)ep$($PSStyle.Reset) - Opens profile for editing.
 $($PSStyle.Foreground.Green)flushdns$($PSStyle.Reset) - Clears DNS cache.
 $($PSStyle.Foreground.Green)pubip$($PSStyle.Reset) - Gets your public IP.
+$($PSStyle.Foreground.Green)show-path$($PSStyle.Reset) - Displays system PATH line-by-line.
 $($PSStyle.Foreground.Green)k9$($PSStyle.Reset) <name> - Kills process by name.
 $($PSStyle.Foreground.Green)la$($PSStyle.Reset) / $($PSStyle.Foreground.Green)ll$($PSStyle.Reset) - Enhanced file listing.
 $($PSStyle.Foreground.Green)mkcd$($PSStyle.Reset) <dir> - Creates and enters directory.
@@ -629,6 +652,7 @@ $($PSStyle.Foreground.Green)nf$($PSStyle.Reset) <name> - Creates a new file.
 $($PSStyle.Foreground.Green)trash$($PSStyle.Reset) <path> - Sends file/folder to Recycle Bin.
 $($PSStyle.Foreground.Green)uptime$($PSStyle.Reset) - Shows system uptime.
 $($PSStyle.Foreground.Green)winutil$($PSStyle.Reset) - Runs CTT WinUtil.
+$($PSStyle.Foreground.Green)wsl-restart$($PSStyle.Reset) - Restarts WSL service (requires admin).
 $($PSStyle.Foreground.Yellow)=======================$($PSStyle.Reset)
 "@
     Write-Host $helpText
