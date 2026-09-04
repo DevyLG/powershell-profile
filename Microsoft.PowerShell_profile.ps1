@@ -17,6 +17,7 @@ function Get-ProfileDir {
 }
 
 $profileDir = Get-ProfileDir
+$timeFilePath = Join-Path -Path $profileDir -ChildPath "LastExecutionTime.txt"
 
 # Admin Check & Telemetry Opt-out
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -49,12 +50,51 @@ function Update-Profile {
         } else {
             Write-Host "Profile is up to date." -ForegroundColor Green
         }
+        # Update last execution time and clear alert
+        Set-Content -Path $timeFilePath -Value (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') -Force
+        Remove-Item (Join-Path -Path $env:TEMP -ChildPath "profile_update_available.txt") -Force -ErrorAction SilentlyContinue
     } catch {
         Write-Error "Unable to check for updates: $_"
     } finally {
         Remove-Item $tempFile -ErrorAction SilentlyContinue
     }
 }
+
+# Asynchronous Daily Update Checker (Non-blocking)
+function Start-BackgroundUpdateCheck {
+    if ([Console]::IsOutputRedirected) { return }
+    
+    $alertFile = Join-Path -Path $env:TEMP -ChildPath "profile_update_available.txt"
+    if (Test-Path $alertFile) {
+        Write-Host "$($PSStyle.Foreground.Cyan)💡 A new profile update is available on GitHub. Run $($PSStyle.Foreground.Yellow)'Update-Profile'$($PSStyle.Foreground.Cyan) to apply.$($PSStyle.Reset)"
+    }
+    
+    $lastCheck = if (Test-Path $timeFilePath) { (Get-Item $timeFilePath).LastWriteTime } else { [DateTime]::MinValue }
+    if ((Get-Date) - $lastCheck -gt (New-TimeSpan -Days 1)) {
+        Set-Content -Path $timeFilePath -Value (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') -Force
+        
+        $jobScript = {
+            param($urlRoot, $profilePath, $alertPath)
+            try {
+                $checkUrl = "$urlRoot/powershell-profile/main/Microsoft.PowerShell_profile.ps1?t=$(Get-Random)"
+                $remoteRaw = (Invoke-RestMethod -Uri $checkUrl -TimeoutSec 4)
+                if ($remoteRaw) {
+                    $remoteBytes = [System.Text.Encoding]::UTF8.GetBytes($remoteRaw)
+                    $remoteHash = [System.BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash($remoteBytes)).Replace("-", "")
+                    $localHash = (Get-FileHash -Path $profilePath -Algorithm SHA256).Hash
+                    if ($remoteHash -ne $localHash) {
+                        Set-Content -Path $alertPath -Value "update" -Force
+                    }
+                }
+            } catch {}
+        }
+        
+        if (Get-Command Start-ThreadJob -ErrorAction SilentlyContinue) {
+            Start-ThreadJob -ScriptBlock $jobScript -ArgumentList $repo_root, $PROFILE, $alertFile | Out-Null
+        }
+    }
+}
+Start-BackgroundUpdateCheck
 
 # Prompt Customization
 function prompt {
@@ -240,6 +280,28 @@ function dtop {
     $dtopPath = if ([Environment]::GetFolderPath("Desktop")) { [Environment]::GetFolderPath("Desktop") } else { "$HOME\Desktop" }
     Set-Location -Path $dtopPath
 }
+
+function gitstuff { 
+    $desktopPath = if ([Environment]::GetFolderPath("Desktop")) { [Environment]::GetFolderPath("Desktop") } else { "$HOME\Desktop" }
+    $gitPath = Join-Path -Path $desktopPath -ChildPath "GitStuff"
+    if (Test-Path $gitPath) { Set-Location -Path $gitPath } else { Set-Location -Path $desktopPath }
+}
+
+function ampdir {
+    if (Test-Path "E:\AMPDatabase\Instances") {
+        Set-Location -Path "E:\AMPDatabase\Instances"
+    } else {
+        Write-Warning "Directory 'E:\AMPDatabase\Instances' not found."
+    }
+}
+
+# Explorer opener (macOS/Linux style 'open .')
+function open {
+    param([string]$path = ".")
+    Invoke-Item $path
+}
+Set-Alias -Name o -Value open
+
 # Python Virtual Environments
 function mkvenv { 
     Write-Host "Creating virtual environment..." -ForegroundColor Cyan
@@ -256,6 +318,18 @@ function venv {
         . .\venv\Scripts\Activate.ps1
     } else {
         Write-Host "❌ No virtual environment found in this folder (.venv or venv). Run 'mkvenv' first to create one." -ForegroundColor Red
+    }
+}
+
+function pyclean {
+    Write-Host "Scanning for Python cache files..." -ForegroundColor DarkGray
+    $items = Get-ChildItem -Recurse -Include __pycache__,*.pyc,*.pyo -ErrorAction SilentlyContinue
+    if ($items) {
+        $count = $items.Count
+        $items | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+        Write-Host "🧹 Cleaned $count Python cache items." -ForegroundColor Green
+    } else {
+        Write-Host "✨ Already clean (no pycache found)." -ForegroundColor DarkGray
     }
 }
 
@@ -303,7 +377,7 @@ if __name__ == '__main__':
 }
 
 
-# Port Hog Finder
+# Port Hog Finder & Terminator
 function whoson {
     param(
         [Parameter(Mandatory=$true, HelpMessage="Enter the port number to check")]
@@ -332,6 +406,29 @@ function whoson {
         Write-Host "$($procId.ToString().PadRight(6))" -ForegroundColor Yellow -NoNewline
         Write-Host " | Process: " -NoNewline
         Write-Host "$processName" -ForegroundColor Green
+    }
+}
+
+function killport {
+    param(
+        [Parameter(Mandatory=$true, HelpMessage="Enter the port number to kill")]
+        [int]$port
+    )
+    $tcp = Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue
+    $udp = Get-NetUDPEndpoint -LocalPort $port -ErrorAction SilentlyContinue
+    $connections = @($tcp; $udp) | Where-Object { $null -ne $_ }
+    
+    if ($connections.Count -eq 0) {
+        Write-Host "No active processes found holding port $port." -ForegroundColor Yellow
+        return
+    }
+    
+    $uniquePids = $connections | Select-Object -ExpandProperty OwningProcess -Unique
+    foreach ($procId in $uniquePids) {
+        $process = Get-Process -Id $procId -ErrorAction SilentlyContinue
+        $processName = if ($process) { $process.ProcessName } else { "PID $procId" }
+        Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
+        Write-Host "🛑 Terminated $processName (PID: $procId) on port $port." -ForegroundColor Red
     }
 }
 
@@ -380,6 +477,13 @@ function lazyg {
     git add .
     git commit -m $msg
     git push
+}
+function gd { git diff }
+function gds { git diff --staged }
+function glog { git log --oneline --graph --decorate -n 15 }
+function gundo {
+    git reset --soft HEAD~1
+    Write-Host "↩️ Last commit undone. Changes kept staged." -ForegroundColor Cyan
 }
 
 # Clean Network Snapshot
@@ -494,6 +598,28 @@ function sysinfo { Get-ComputerInfo }
 
 # Environment PATH Viewer
 function show-path { $env:PATH -split ';' | Where-Object { $_ } }
+
+# File Hash Verification
+function sha256 {
+    param([Parameter(Mandatory=$true, Position=0)][string]$path)
+    if (-not (Test-Path -Path $path)) {
+        Write-Error "File '$path' not found."
+        return
+    }
+    (Get-FileHash -Path $path -Algorithm SHA256).Hash
+}
+
+# Live Weather
+function weather {
+    param([string]$location = "Olathe")
+    try {
+        $data = (Invoke-RestMethod -Uri "https://wttr.in/${location}?format=3" -TimeoutSec 3).Trim()
+        Write-Host $data -ForegroundColor Cyan
+    } catch {
+        Write-Warning "Unable to retrieve weather for '$location'."
+    }
+}
+Set-Alias -Name wttr -Value weather
 
 # Container & WSL Utilities
 function dps {
@@ -638,49 +764,61 @@ $($PSStyle.Foreground.Yellow)=======================$($PSStyle.Reset)
 $($PSStyle.Foreground.Green)Edit-Profile$($PSStyle.Reset) - Opens the current user's profile for editing.
 $($PSStyle.Foreground.Green)Update-Profile$($PSStyle.Reset) - Pulls the latest config from your GitHub.
 
-$($PSStyle.Foreground.Cyan)Server Management$($PSStyle.Reset)
+$($PSStyle.Foreground.Cyan)Server & Process Management$($PSStyle.Reset)
 $($PSStyle.Foreground.Yellow)=======================$($PSStyle.Reset)
 $($PSStyle.Foreground.Green)amp$($PSStyle.Reset) <cmd> - Runs AMP Instant Manager (e.g., 'amp status').
 $($PSStyle.Foreground.Green)whoson$($PSStyle.Reset) <port> - Finds the exact Process ID and program locking a network port.
+$($PSStyle.Foreground.Green)killport$($PSStyle.Reset) <port> - Forcefully terminates the process occupying a specific port.
+$($PSStyle.Foreground.Green)k9$($PSStyle.Reset) <name> - Forcefully terminates a process by name.
 
 $($PSStyle.Foreground.Cyan)Python Workflows$($PSStyle.Reset)
 $($PSStyle.Foreground.Yellow)=======================$($PSStyle.Reset)
-$($PSStyle.Foreground.Green)mkproj$($PSStyle.Reset) <name> - Bootstraps a new Python project, creates .venv, and opens the editor.
+$($PSStyle.Foreground.Green)mkproj$($PSStyle.Reset) <name> - Bootstraps a new Python project, creates .venv, and opens editor.
 $($PSStyle.Foreground.Green)mkvenv$($PSStyle.Reset) - Creates a new Python .venv folder and activates it instantly.
 $($PSStyle.Foreground.Green)venv$($PSStyle.Reset) - Activates an existing Python .venv in the current directory.
+$($PSStyle.Foreground.Green)pyclean$($PSStyle.Reset) - Recursively purges all __pycache__ and .pyc files.
+
+$($PSStyle.Foreground.Cyan)Navigation & File Tools$($PSStyle.Reset)
+$($PSStyle.Foreground.Yellow)=======================$($PSStyle.Reset)
+$($PSStyle.Foreground.Green)gitstuff$($PSStyle.Reset) - Jumps to your Git repositories folder on Desktop.
+$($PSStyle.Foreground.Green)ampdir$($PSStyle.Reset) - Jumps to AMP Instances directory (E:\AMPDatabase\Instances).
+$($PSStyle.Foreground.Green)docs$($PSStyle.Reset) - Jumps to Documents.
+$($PSStyle.Foreground.Green)dtop$($PSStyle.Reset) - Jumps to Desktop.
+$($PSStyle.Foreground.Green)open$($PSStyle.Reset) / $($PSStyle.Foreground.Green)o$($PSStyle.Reset) [path] - Opens current or target folder in Windows File Explorer.
+$($PSStyle.Foreground.Green)trash$($PSStyle.Reset) <path> - Safely moves file/folder to the Recycle Bin.
+$($PSStyle.Foreground.Green)la$($PSStyle.Reset) / $($PSStyle.Foreground.Green)ll$($PSStyle.Reset) - Enhanced file listings.
+$($PSStyle.Foreground.Green)mkcd$($PSStyle.Reset) <dir> - Creates and enters directory.
+$($PSStyle.Foreground.Green)nf$($PSStyle.Reset) <name> - Creates a new file.
 
 $($PSStyle.Foreground.Cyan)Git Shortcuts$($PSStyle.Reset)
 $($PSStyle.Foreground.Yellow)=======================$($PSStyle.Reset)
-$($PSStyle.Foreground.Green)g$($PSStyle.Reset) - Changes to the GitHub directory.
+$($PSStyle.Foreground.Green)gs$($PSStyle.Reset) - git status
 $($PSStyle.Foreground.Green)ga$($PSStyle.Reset) - git add .
 $($PSStyle.Foreground.Green)gc$($PSStyle.Reset) <msg> - git commit -m
-$($PSStyle.Foreground.Green)gcl$($PSStyle.Reset) <repo> - git clone
 $($PSStyle.Foreground.Green)gcom$($PSStyle.Reset) <msg> - Adds all changes and commits.
 $($PSStyle.Foreground.Green)gp$($PSStyle.Reset) / $($PSStyle.Foreground.Green)gpush$($PSStyle.Reset) - git push
 $($PSStyle.Foreground.Green)gpull$($PSStyle.Reset) - git pull
-$($PSStyle.Foreground.Green)gs$($PSStyle.Reset) - git status
+$($PSStyle.Foreground.Green)gd$($PSStyle.Reset) - git diff (current uncommitted changes)
+$($PSStyle.Foreground.Green)gds$($PSStyle.Reset) - git diff --staged (staged changes)
+$($PSStyle.Foreground.Green)glog$($PSStyle.Reset) - Clean one-line visual git log graph.
+$($PSStyle.Foreground.Green)gundo$($PSStyle.Reset) - Undoes last commit, keeping all changes staged.
 $($PSStyle.Foreground.Green)lazyg$($PSStyle.Reset) <msg> - Adds, commits, and pushes in one command.
+$($PSStyle.Foreground.Green)gcl$($PSStyle.Reset) <repo> - git clone
 
-$($PSStyle.Foreground.Cyan)Shortcuts$($PSStyle.Reset)
+$($PSStyle.Foreground.Cyan)System & Diagnostic Tools$($PSStyle.Reset)
 $($PSStyle.Foreground.Yellow)=======================$($PSStyle.Reset)
-$($PSStyle.Foreground.Green)Get-PCReport$($PSStyle.Reset) - Generates a full hardware diagnostic text file on the Desktop.
-$($PSStyle.Foreground.Green)netinfo$($PSStyle.Reset) - Displays a clean, color-coded summary of your active network connection.
-$($PSStyle.Foreground.Green)cpy$($PSStyle.Reset) <text> - Copies text to clipboard.
-$($PSStyle.Foreground.Green)pst$($PSStyle.Reset) - Retrieves text from clipboard.
-$($PSStyle.Foreground.Green)df$($PSStyle.Reset) - Displays volume info.
-$($PSStyle.Foreground.Green)docs$($PSStyle.Reset) - Jumps to Documents.
-$($PSStyle.Foreground.Green)dtop$($PSStyle.Reset) - Jumps to Desktop.
-$($PSStyle.Foreground.Green)dps$($PSStyle.Reset) - Displays compact list of running Docker containers.
-$($PSStyle.Foreground.Green)ep$($PSStyle.Reset) - Opens profile for editing.
+$($PSStyle.Foreground.Green)Get-PCReport$($PSStyle.Reset) - Generates a full hardware diagnostic text file on Desktop.
+$($PSStyle.Foreground.Green)netinfo$($PSStyle.Reset) - Displays a clean summary of your active network connection.
+$($PSStyle.Foreground.Green)weather$($PSStyle.Reset) / $($PSStyle.Foreground.Green)wttr$($PSStyle.Reset) [loc] - Shows quick live weather (defaults to Olathe).
+$($PSStyle.Foreground.Green)sha256$($PSStyle.Reset) <file> - Computes SHA-256 hash of a file.
+$($PSStyle.Foreground.Green)pubip$($PSStyle.Reset) - Displays public IP address.
 $($PSStyle.Foreground.Green)flushdns$($PSStyle.Reset) - Clears DNS cache.
-$($PSStyle.Foreground.Green)pubip$($PSStyle.Reset) - Gets your public IP.
+$($PSStyle.Foreground.Green)cpy$($PSStyle.Reset) <text> - Copies text to clipboard (also accepts piped input).
+$($PSStyle.Foreground.Green)pst$($PSStyle.Reset) - Retrieves text from clipboard.
+$($PSStyle.Foreground.Green)df$($PSStyle.Reset) - Displays disk volume info.
+$($PSStyle.Foreground.Green)dps$($PSStyle.Reset) - Displays compact list of running Docker containers.
+$($PSStyle.Foreground.Green)uptime$($PSStyle.Reset) - Displays system start time and uptime duration.
 $($PSStyle.Foreground.Green)show-path$($PSStyle.Reset) - Displays system PATH line-by-line.
-$($PSStyle.Foreground.Green)k9$($PSStyle.Reset) <name> - Kills process by name.
-$($PSStyle.Foreground.Green)la$($PSStyle.Reset) / $($PSStyle.Foreground.Green)ll$($PSStyle.Reset) - Enhanced file listing.
-$($PSStyle.Foreground.Green)mkcd$($PSStyle.Reset) <dir> - Creates and enters directory.
-$($PSStyle.Foreground.Green)nf$($PSStyle.Reset) <name> - Creates a new file.
-$($PSStyle.Foreground.Green)trash$($PSStyle.Reset) <path> - Sends file/folder to Recycle Bin.
-$($PSStyle.Foreground.Green)uptime$($PSStyle.Reset) - Shows system uptime.
 $($PSStyle.Foreground.Green)winutil$($PSStyle.Reset) - Runs CTT WinUtil.
 $($PSStyle.Foreground.Green)wsl-restart$($PSStyle.Reset) - Restarts WSL service (requires admin).
 $($PSStyle.Foreground.Yellow)=======================$($PSStyle.Reset)
